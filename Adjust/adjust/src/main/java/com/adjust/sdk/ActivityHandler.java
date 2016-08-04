@@ -16,22 +16,19 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Handler;
-import android.os.HandlerThread;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.adjust.sdk.Constants.ACTIVITY_STATE_FILENAME;
 import static com.adjust.sdk.Constants.ATTRIBUTION_FILENAME;
-import static com.adjust.sdk.Constants.LOGTAG;
 import static com.adjust.sdk.Constants.SESSION_CALLBACK_PARAMETERS_FILENAME;
 import static com.adjust.sdk.Constants.SESSION_PARAMETERS_FILENAME;
 import static com.adjust.sdk.Constants.SESSION_PARTNER_PARAMETERS_FILENAME;
 
-public class ActivityHandler extends HandlerThread implements IActivityHandler {
+public class ActivityHandler implements IActivityHandler {
     private static long FOREGROUND_TIMER_INTERVAL;
     private static long FOREGROUND_TIMER_START;
     private static long BACKGROUND_TIMER_INTERVAL;
@@ -48,12 +45,11 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
     private static final String SESSION_CALLBACK_PARAMETERS_NAME = "Session Callback parameters";
     private static final String SESSION_PARTNER_PARAMETERS_NAME = "Session Partner parameters";
 
-    private Handler internalHandler;
+    private ScheduledExecutorService scheduledExecutorService;
     private IPackageHandler packageHandler;
     private ActivityState activityState;
     private ILogger logger;
     private TimerCycle foregroundTimer;
-    private ScheduledExecutorService scheduler;
     private TimerOnce backgroundTimer;
     private TimerOnce delayStartTimer;
     private InternalState internalState;
@@ -76,13 +72,10 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
         if (delayStartTimer != null) {
             delayStartTimer.cancel(true);
         }
-        if (scheduler != null) {
+        if (scheduledExecutorService != null) {
             try {
-                scheduler.shutdownNow();
+                scheduledExecutorService.shutdown();
             } catch(SecurityException se) {}
-        }
-        if (internalHandler == null) {
-            internalHandler.removeCallbacksAndMessages(null);
         }
         if (packageHandler != null) {
             packageHandler.teardown(deleteState);
@@ -106,11 +99,10 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
         teardownAttributionS(deleteState);
         teardownAllSessionParametersS(deleteState);
 
-        internalHandler = null;
         packageHandler = null;
         logger = null;
         foregroundTimer = null;
-        scheduler = null;
+        scheduledExecutorService = null;
         backgroundTimer = null;
         delayStartTimer = null;
         internalState = null;
@@ -119,11 +111,6 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
         attributionHandler = null;
         sdkClickHandler = null;
         sessionParameters = null;
-
-        try {
-            interrupt();
-        } catch (SecurityException se) {}
-        quit();
     }
 
     public class InternalState {
@@ -171,10 +158,6 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
     }
 
     private ActivityHandler(AdjustConfig adjustConfig) {
-        super(LOGTAG, MIN_PRIORITY);
-        setDaemon(true);
-        start();
-
         init(adjustConfig);
 
         // init logger to be available everywhere
@@ -182,7 +165,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
         logger.lockLogLevel();
 
-        this.internalHandler = new Handler(getLooper());
+        scheduledExecutorService = Util.getScheduledExecutorService("ActivityHandler-");
         internalState = new InternalState();
 
         // enabled by default
@@ -196,7 +179,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
         // does not need to update packages by default
         internalState.updatePackages = false;
 
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 initI();
@@ -247,7 +230,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
     public void onResume() {
         internalState.background = false;
 
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 delayStartI();
@@ -267,7 +250,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
     public void onPause() {
         internalState.background = true;
 
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 stopForegroundTimerI();
@@ -283,7 +266,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void trackEvent(final AdjustEvent event) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 if (activityState == null) {
@@ -420,7 +403,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void readOpenUrl(final Uri url, final long clickTime) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 readOpenUrlI(url, clickTime);
@@ -457,7 +440,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void sendReferrer(final String referrer, final long clickTime) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 sendReferrerI(referrer, clickTime);
@@ -467,7 +450,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void launchEventResponseTasks(final EventResponseData eventResponseData) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 launchEventResponseTasksI(eventResponseData);
@@ -477,7 +460,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void launchSessionResponseTasks(final SessionResponseData sessionResponseData) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 launchSessionResponseTasksI(sessionResponseData);
@@ -487,7 +470,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void launchAttributionResponseTasks(final AttributionResponseData attributionResponseData) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 launchAttributionResponseTasksI(attributionResponseData);
@@ -497,7 +480,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void sendFirstPackages () {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 sendFirstPackagesI();
@@ -507,7 +490,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void addExternalDeviceId(final String externalDeviceId) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 addExternalDeviceIdI(externalDeviceId);
@@ -517,7 +500,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void addSessionCallbackParameter(final String key, final String value) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 addSessionCallbackParameterI(key, value);
@@ -527,7 +510,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void addSessionPartnerParameter(final String key, final String value) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 addSessionPartnerParameterI(key, value);
@@ -537,7 +520,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void removeSessionCallbackParameter(final String key) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 removeSessionCallbackParameterI(key);
@@ -547,7 +530,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void removeSessionPartnerParameter(final String key) {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 removeSessionPartnerParameterI(key);
@@ -557,7 +540,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void resetExternalDeviceId() {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 resetExternalDeviceIdI();
@@ -567,7 +550,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void resetSessionCallbackParameters() {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 resetSessionCallbackParametersI();
@@ -577,7 +560,7 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
 
     @Override
     public void resetSessionPartnerParameters() {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 resetSessionPartnerParametersI();
@@ -599,28 +582,10 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
     }
 
     private void updateHandlersStatusAndSend() {
-        internalHandler.post(new Runnable() {
+        scheduledExecutorService.submit(new Runnable() {
             @Override
             public void run() {
                 updateHandlersStatusAndSendI();
-            }
-        });
-    }
-
-    private void foregroundTimerFired() {
-        internalHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                foregroundTimerFiredI();
-            }
-        });
-    }
-
-    private void backgroundTimerFired() {
-        internalHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                backgroundTimerFiredI();
             }
         });
     }
@@ -676,13 +641,11 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
             sendReferrer(adjustConfig.referrer, adjustConfig.referrerClickTime); // send to background queue to make sure that activityState is valid
         }
 
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-
-        foregroundTimer = new TimerCycle(scheduler,
+        foregroundTimer = new TimerCycle(scheduledExecutorService,
                 new Runnable() {
                     @Override
                     public void run() {
-                        foregroundTimerFired();
+                        foregroundTimerFiredI();
                     }
                 }, FOREGROUND_TIMER_START, FOREGROUND_TIMER_INTERVAL, FOREGROUND_TIMER_NAME);
 
@@ -690,10 +653,10 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
         if (adjustConfig.sendInBackground) {
             logger.info("Send in background configured");
 
-            backgroundTimer = new TimerOnce(scheduler, new Runnable() {
+            backgroundTimer = new TimerOnce(scheduledExecutorService, new Runnable() {
                 @Override
                 public void run() {
-                    backgroundTimerFired();
+                    backgroundTimerFiredI();
                 }
             }, BACKGROUND_TIMER_NAME);
         }
@@ -703,10 +666,10 @@ public class ActivityHandler extends HandlerThread implements IActivityHandler {
                 adjustConfig.delayStart > 0)
         {
             logger.info("Delay start configured");
-            delayStartTimer = new TimerOnce(scheduler, new Runnable() {
+            delayStartTimer = new TimerOnce(scheduledExecutorService, new Runnable() {
                 @Override
                 public void run() {
-                    sendFirstPackages();
+                    sendFirstPackagesI();
                 }
             }, DELAY_TIMER_NAME);
         }
