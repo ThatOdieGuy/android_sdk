@@ -17,13 +17,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.net.ssl.HttpsURLConnection;
 
 public class RequestHandler implements IRequestHandler {
-    private ScheduledExecutorService scheduledExecutorService;
+    private CustomScheduledExecutorService scheduledExecutorService;
     private IPackageHandler packageHandler;
     private ILogger logger;
 
     public RequestHandler(IPackageHandler packageHandler) {
         this.logger = AdjustFactory.getLogger();
-        this.scheduledExecutorService = Util.getScheduledExecutorService("RequestHandler-");
+        this.scheduledExecutorService = new CustomScheduledExecutorService("RequestHandler");
         init(packageHandler);
     }
 

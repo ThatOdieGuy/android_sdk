@@ -14,7 +14,7 @@ import javax.net.ssl.HttpsURLConnection;
  * Created by pfms on 31/03/16.
  */
 public class SdkClickHandler implements ISdkClickHandler {
-    private ScheduledExecutorService scheduledExecutorService;
+    private CustomScheduledExecutorService scheduledExecutorService;
     private ILogger logger;
     private boolean paused;
     private List<ActivityPackage> packageQueue;
@@ -40,7 +40,7 @@ public class SdkClickHandler implements ISdkClickHandler {
     public SdkClickHandler(boolean startsSending) {
         init(startsSending);
         this.logger = AdjustFactory.getLogger();
-        this.scheduledExecutorService = Util.getScheduledExecutorService("SdkClickHandler-");
+        this.scheduledExecutorService = new CustomScheduledExecutorService("SdkClickHandler");
         this.backoffStrategy = AdjustFactory.getSdkClickBackoffStrategy();
     }
 

@@ -26,7 +26,7 @@ public class PackageHandler implements IPackageHandler {
     private static final String PACKAGE_QUEUE_FILENAME = "AdjustIoPackageQueue";
     private static final String PACKAGE_QUEUE_NAME = "Package queue";
 
-    private ScheduledExecutorService scheduledExecutorService;
+    private CustomScheduledExecutorService scheduledExecutorService;
     private IRequestHandler requestHandler;
     private IActivityHandler activityHandler;
     private List<ActivityPackage> packageQueue;
@@ -65,7 +65,7 @@ public class PackageHandler implements IPackageHandler {
     public PackageHandler(IActivityHandler activityHandler,
                           Context context,
                           boolean startsSending) {
-        this.scheduledExecutorService = Util.getScheduledExecutorService("PackageHandler-");
+        this.scheduledExecutorService = new CustomScheduledExecutorService("PackageHandler");
         this.logger = AdjustFactory.getLogger();
         this.backoffStrategy = AdjustFactory.getPackageHandlerBackoffStrategy();
 

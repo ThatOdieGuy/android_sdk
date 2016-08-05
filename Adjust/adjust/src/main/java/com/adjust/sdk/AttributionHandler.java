@@ -15,7 +15,7 @@ import javax.net.ssl.HttpsURLConnection;
  * Created by pfms on 07/11/14.
  */
 public class AttributionHandler implements IAttributionHandler {
-    private ScheduledExecutorService scheduler;
+    private CustomScheduledExecutorService scheduler;
     private IActivityHandler activityHandler;
     private ILogger logger;
     private ActivityPackage attributionPackage;
@@ -48,7 +48,7 @@ public class AttributionHandler implements IAttributionHandler {
                               ActivityPackage attributionPackage,
                               boolean startsSending,
                               boolean hasListener) {
-        scheduler = Util.getScheduledExecutorService("AttributionHandler-");
+        scheduler = new CustomScheduledExecutorService("AttributionHandler");
         logger = AdjustFactory.getLogger();
 
         if (this.scheduler != null) {
